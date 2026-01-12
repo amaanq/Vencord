@@ -19,15 +19,48 @@
 import { Settings, SettingsStore } from "@api/Settings";
 import { createAndAppendStyle } from "@utils/css";
 import { isNonNullish } from "@utils/guards";
+import { localStorage } from "@utils/localStorage";
 import { ThemeStore } from "@vencord/discord-types";
 import { PopoutWindowStore } from "@webpack/common";
 
 import { userStyleRootNode, vencordRootNode } from "./Styles";
 
+const THEME_CSS_CACHE_KEY = "VencordThemeCssCache";
+const QUICK_CSS_CACHE_KEY = "VencordQuickCssCache";
+
 let style: HTMLStyleElement;
 let themesStyle: HTMLStyleElement;
 
 const themeChangeListeners = new Set<() => void>();
+
+function updateCssCache(key: string, css: string | undefined) {
+    if (!IS_WEB || IS_USERSCRIPT) return;
+    try {
+        if (css) localStorage.setItem(key, css);
+        else localStorage.removeItem(key);
+    } catch (e) {
+        console.error("[Vencord] Failed to update CSS cache:", e);
+    }
+}
+
+// Inject cached CSS immediately to prevent themes not loading on cold start
+if (IS_WEB && !IS_USERSCRIPT) {
+    try {
+        const cached = [
+            localStorage.getItem(THEME_CSS_CACHE_KEY),
+            localStorage.getItem(QUICK_CSS_CACHE_KEY)
+        ].filter(Boolean).join("\n");
+
+        if (cached) {
+            const earlyStyle = document.createElement("style");
+            earlyStyle.id = "vencord-themes-early";
+            earlyStyle.textContent = cached;
+            document.documentElement?.appendChild(earlyStyle);
+        }
+    } catch (e) {
+        console.error("[Vencord] Failed to load cached CSS:", e);
+    }
+}
 
 async function toggle(isEnabled: boolean) {
     if (!style) {
@@ -38,15 +71,16 @@ async function toggle(isEnabled: boolean) {
                 // At the time of writing this, changing textContent resets the disabled state
                 style.disabled = !Settings.useQuickCss;
                 updatePopoutWindows();
+                updateCssCache(QUICK_CSS_CACHE_KEY, css);
             });
-            style.textContent = await VencordNative.quickCss.get();
+            const css = await VencordNative.quickCss.get();
+            style.textContent = css;
+            updateCssCache(QUICK_CSS_CACHE_KEY, css);
+            document.getElementById("vencord-themes-early")?.remove();
         }
     } else
         style.disabled = !isEnabled;
 }
-
-// for cleanup
-let previousThemeBlobObjectURLs = [] as string[];
 
 async function initThemes() {
     themesStyle ??= createAndAppendStyle("vencord-themes", userStyleRootNode);
@@ -71,25 +105,32 @@ async function initThemes() {
         })
         .filter(link => link !== null);
 
-    if (IS_WEB) {
-        previousThemeBlobObjectURLs.forEach(url => URL.revokeObjectURL(url));
+    // For web, we inline local theme CSS directly instead of using blob URLs
+    // This allows us to cache the CSS in localStorage for instant loading on cold start
+    const inlinedCss: string[] = [];
 
-        const objectUrls = await Promise.all(enabledThemes.map(async theme => {
+    if (IS_WEB) {
+        const themeCss = await Promise.all(enabledThemes.map(async theme => {
             const themeData = await VencordNative.themes.getThemeData(theme);
             if (!themeData) return null;
 
-            const blob = new Blob([themeData], { type: "text/css" });
-            return URL.createObjectURL(blob);
+            return `/* Theme: ${theme} */\n${themeData}`;
         }));
 
-        previousThemeBlobObjectURLs = objectUrls.filter(isNonNullish);
-        links.push(...previousThemeBlobObjectURLs);
+        inlinedCss.push(...themeCss.filter(isNonNullish));
     } else {
         const localThemes = enabledThemes.map(theme => `vencord:///themes/${theme}?v=${Date.now()}`);
         links.push(...localThemes);
     }
 
-    themesStyle.textContent = links.map(link => `@import url("${link.trim()}");`).join("\n");
+    const importCss = links.map(link => `@import url("${link.trim()}");`).join("\n");
+    const fullCss = importCss + (inlinedCss.length ? "\n" + inlinedCss.join("\n") : "");
+
+    themesStyle.textContent = fullCss;
+
+    updateCssCache(THEME_CSS_CACHE_KEY, inlinedCss.length ? inlinedCss.join("\n") : undefined);
+    document.getElementById("vencord-themes-early")?.remove();
+
     updatePopoutWindows();
     themeChangeListeners.forEach(listener => listener());
 }
