@@ -13,6 +13,7 @@ import { Menu } from "@webpack/common";
 
 const DefaultEngines = {
     Google: "https://www.google.com/search?q=",
+    Kagi: "https://kagi.com/search?q=",
     DuckDuckGo: "https://duckduckgo.com/?q=",
     Brave: "https://search.brave.com/search?q=",
     Bing: "https://www.bing.com/search?q=",
