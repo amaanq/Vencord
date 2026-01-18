@@ -49,14 +49,18 @@ export const settings = definePluginSettings({
     },
     service: {
         type: OptionType.SELECT,
-        description: IS_WEB ? "Translation provider (not available on web)" : "Translation provider",
-        hidden: IS_WEB,
-        options: [
-            { label: "Google Translate", value: "google", default: true },
-            { label: "DeepL Free — API key required", value: "deepl" },
-            { label: "DeepL Pro — API key required", value: "deepl-pro" },
-            { label: "Kagi Translate — API key required", value: "kagi" }
-        ] as const,
+        description: IS_WEB ? "Translation provider (DeepL not available on web)" : "Translation provider",
+        options: IS_WEB
+            ? [
+                { label: "Google Translate", value: "google", default: true },
+                { label: "Kagi Translate — API key required", value: "kagi" }
+            ] as const
+            : [
+                { label: "Google Translate", value: "google", default: true },
+                { label: "DeepL Free — API key required", value: "deepl" },
+                { label: "DeepL Pro — API key required", value: "deepl-pro" },
+                { label: "Kagi Translate — API key required", value: "kagi" }
+            ] as const,
         onChange: resetLanguageDefaults
     },
     deeplApiKey: {
@@ -65,10 +69,19 @@ export const settings = definePluginSettings({
         description: "Your DeepL API key (from deepl.com/your-account)",
         default: ""
     },
-    kagiSession: {
+    kagiApiKey: {
         type: OptionType.STRING,
-        description: "Your Kagi session token (from kagi.com/settings?p=user_details)",
+        displayName: "Kagi API Key",
+        description: "Your Kagi session token (from the Session Link in kagi.com/settings/user_details)",
         default: ""
+    },
+    kagiModel: {
+        type: OptionType.SELECT,
+        description: "Kagi translation model",
+        options: [
+            { label: "Standard (faster)", value: "standard", default: true },
+            { label: "Best (higher quality)", value: "best" }
+        ] as const
     },
     autoTranslate: {
         type: OptionType.BOOLEAN,
@@ -92,7 +105,10 @@ export const settings = definePluginSettings({
     deeplApiKey: {
         hidden() { return this.store.service !== "deepl" && this.store.service !== "deepl-pro"; }
     },
-    kagiSession: {
+    kagiApiKey: {
+        hidden() { return this.store.service !== "kagi"; }
+    },
+    kagiModel: {
         hidden() { return this.store.service !== "kagi"; }
     }
 }).withPrivateSettings<{
