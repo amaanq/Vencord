@@ -602,3 +602,12 @@ export const KagiLanguages = {
     "za": "Zhuang",
     "zu": "Zulu"
 } as const;
+export function kagiLanguageToGoogleLanguage(language: string) {
+    switch (language) {
+        case "zh": return "zh-CN";
+        case "he": return "iw";
+        case "jv": return "jw";
+        default:
+            return language;
+    }
+}
