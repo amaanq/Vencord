@@ -14,7 +14,8 @@
         "webRequest",
         "webRequestBlocking",
         "*://*.discord.com/*",
-        "https://raw.githubusercontent.com/*"
+        "https://raw.githubusercontent.com/*",
+        "https://translate.kagi.com/*"
     ],
 
     "content_scripts": [
@@ -22,15 +23,13 @@
             "run_at": "document_start",
             "matches": ["*://*.discord.com/*"],
             "js": ["content.js"],
-            "all_frames": true,
-            "world": "ISOLATED"
+            "all_frames": true
         },
         {
             "run_at": "document_start",
             "matches": ["*://*.discord.com/*"],
             "js": ["dist/Vencord.js"],
-            "all_frames": true,
-            "world": "MAIN"
+            "all_frames": true
         }
     ],
 
@@ -38,7 +37,7 @@
         "scripts": ["background.js"]
     },
 
-    "web_accessible_resources": ["dist/Vencord.js", "dist/Vencord.css"],
+    "web_accessible_resources": ["dist/*", "vendor/*"],
 
     "browser_specific_settings": {
         "gecko": {
