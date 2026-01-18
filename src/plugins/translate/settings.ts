@@ -47,13 +47,19 @@ export const settings = definePluginSettings({
 
     service: {
         type: OptionType.SELECT,
-        description: IS_WEB ? "Translation service (Not supported on Web!)" : "Translation service",
-        disabled: () => IS_WEB,
-        options: [
-            { label: "Google Translate", value: "google", default: true },
-            { label: "DeepL Free", value: "deepl" },
-            { label: "DeepL Pro", value: "deepl-pro" }
-        ] as const,
+        description: IS_WEB ? "Translation service (DeepL not supported on Web)" : "Translation service",
+        disabled: () => false,
+        options: IS_WEB
+            ? [
+                { label: "Google Translate", value: "google", default: true },
+                { label: "Kagi Translate", value: "kagi" }
+            ] as const
+            : [
+                { label: "Google Translate", value: "google", default: true },
+                { label: "DeepL Free", value: "deepl" },
+                { label: "DeepL Pro", value: "deepl-pro" },
+                { label: "Kagi Translate", value: "kagi" }
+            ] as const,
         onChange: resetLanguageDefaults
     },
     deeplApiKey: {
@@ -62,6 +68,20 @@ export const settings = definePluginSettings({
         default: "",
         placeholder: "Get your API key from https://deepl.com/your-account",
         disabled: () => IS_WEB
+    },
+    kagiApiKey: {
+        type: OptionType.STRING,
+        description: "Kagi session token (from Session Link in account settings)",
+        default: "",
+        placeholder: "Get token from kagi.com/settings/user_details → Session Link"
+    },
+    kagiModel: {
+        type: OptionType.SELECT,
+        description: "Kagi translation model",
+        options: [
+            { label: "Standard (faster)", value: "standard", default: true },
+            { label: "Best (higher quality)", value: "best" }
+        ] as const
     },
     autoTranslate: {
         type: OptionType.BOOLEAN,
@@ -78,12 +98,13 @@ export const settings = definePluginSettings({
 }>();
 
 export function resetLanguageDefaults() {
-    if (IS_WEB || settings.store.service === "google") {
+    if (IS_WEB || settings.store.service === "google" || settings.store.service === "kagi") {
         settings.store.receivedInput = "auto";
         settings.store.receivedOutput = "en";
         settings.store.sentInput = "auto";
         settings.store.sentOutput = "en";
     } else {
+        // DeepL
         settings.store.receivedInput = "";
         settings.store.receivedOutput = "en-us";
         settings.store.sentInput = "";
