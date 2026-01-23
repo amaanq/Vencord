@@ -1,0 +1,106 @@
+name: Build and Release CRX
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FORCE_COLOR: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web
+        run: pnpm buildWebStandalone
+
+      - name: Build extension
+        run: pnpm build --standalone
+
+      - name: Install crx3
+        run: npm install -g crx3
+
+      - name: Write extension key
+        run: echo "${{ secrets.EXTENSION_KEY }}" | base64 -d > extension.pem
+
+      - name: Get version from manifest
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' dist/chromium-unpacked/manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Pack CRX
+        run: crx3 pack dist/chromium-unpacked -o vencord-web.crx -p extension.pem
+
+      - name: Get Extension ID
+        id: extid
+        run: |
+          EXTID=$(python3 << 'PYEOF'
+          import hashlib, subprocess
+          der = subprocess.run(['openssl', 'rsa', '-in', 'extension.pem', '-pubout', '-outform', 'DER'],
+                               capture_output=True).stdout
+          digest = hashlib.sha256(der).digest()[:16]
+          print(''.join(chr(ord('a') + (b >> 4)) + chr(ord('a') + (b & 0xf)) for b in digest))
+          PYEOF
+          )
+          echo "extid=$EXTID" >> $GITHUB_OUTPUT
+
+      - name: Generate update manifest
+        env:
+          EXTID: ${{ steps.extid.outputs.extid }}
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          cat > updates.xml << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <gupdate xmlns="http://www.google.com/update2/response" protocol="2.0">
+            <app appid="${EXTID}">
+              <updatecheck codebase="https://github.com/${REPO}/releases/download/v${VERSION}/vencord-web.crx" version="${VERSION}"/>
+            </app>
+          </gupdate>
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            vencord-web.crx
+            updates.xml
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Vencord Web v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update latest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXTID: ${{ steps.extid.outputs.extid }}
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          cat > updates.xml << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <gupdate xmlns="http://www.google.com/update2/response" protocol="2.0">
+            <app appid="${EXTID}">
+              <updatecheck codebase="https://github.com/${REPO}/releases/latest/download/vencord-web.crx" version="${VERSION}"/>
+            </app>
+          </gupdate>
+          EOF
+          gh release upload latest updates.xml vencord-web.crx --clobber 2>/dev/null || gh release create latest updates.xml vencord-web.crx -t "Latest Release" -n "Latest stable release"
