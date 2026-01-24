@@ -5,7 +5,8 @@
     "name": "Vencord Web",
     "description": "The cutest Discord mod now in your browser",
     "author": "Vendicated",
-    "homepage_url": "https://github.com/Vendicated/Vencord",
+    "homepage_url": "https://github.com/amaanq/Vencord",
+    "update_url": "https://github.com/amaanq/Vencord/releases/latest/download/updates.xml",
     "icons": {
         "128": "icon.png"
     },
